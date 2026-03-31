@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Task from './components/Task';
+import Task from './components/task';
 
 export default function App() {
   return (
