@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Platform, Modal, Animated } from 'react-native';
+import Banner from './Banner';
 
 const Spaceships = ({ onBack }) => {
   const [ships, setShips] = useState([]);
@@ -148,6 +149,7 @@ const Spaceships = ({ onBack }) => {
       <TouchableOpacity onPress={onBack} style={styles.backButton}>
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
+      <Banner />
       <View style={styles.content}>
         <Text style={styles.title}>Spaceships</Text>
         {loading ? (

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Platform, Modal, Animated } from 'react-native';
+import Banner from './Banner';
 
 const Films = ({ onBack }) => {
   const [films, setFilms] = useState([]);
@@ -150,6 +151,7 @@ const Films = ({ onBack }) => {
       <TouchableOpacity onPress={onBack} style={styles.backButton}>
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
+      <Banner />
       <View style={styles.content}>
         <Text style={styles.title}>Films</Text>
         {loading ? (
