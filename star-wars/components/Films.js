@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Platform, Modal, PanResponder } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Platform, Modal, Animated } from 'react-native';
 
 const Films = ({ onBack }) => {
   const [films, setFilms] = useState([]);
@@ -12,10 +12,34 @@ const Films = ({ onBack }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTitle, setSelectedTitle] = useState('');
   const touchStartX = useRef(0);
+  const animatedValues = useRef({});
+
+  const initializeAnimatedValues = (items) => {
+    items.forEach((item) => {
+      if (!animatedValues.current[item.uid]) {
+        animatedValues.current[item.uid] = new Animated.Value(0);
+      }
+    });
+  };
 
   useEffect(() => {
     fetchFilms();
   }, []);
+
+  useEffect(() => {
+    if (films.length > 0) {
+      initializeAnimatedValues(films);
+      const animations = films.map((film) =>
+        Animated.timing(animatedValues.current[film.uid], {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        })
+      );
+
+      Animated.stagger(100, animations).start();
+    }
+  }, [films]);
 
   const handleSwipe = (title) => {
     setSelectedTitle(title);
@@ -26,7 +50,9 @@ const Films = ({ onBack }) => {
     try {
       const response = await fetch('https://www.swapi.tech/api/films');
       const data = await response.json();
-      setFilms(data.result || []);
+      const items = data.result || [];
+      initializeAnimatedValues(items);
+      setFilms(items);
     } catch (err) {
       setError('Failed to load films');
     } finally {
@@ -84,9 +110,13 @@ const Films = ({ onBack }) => {
     const errorDetails = detailsError[item.uid];
     const title = item.properties?.title || item.name || 'Unknown film';
 
+    const animatedStyle = {
+      opacity: animatedValues.current[item.uid] || new Animated.Value(0),
+    };
+
     return (
-      <View
-        style={styles.item}
+      <Animated.View
+        style={[styles.item, animatedStyle]}
         onTouchStart={handleTouchStart}
         onTouchEnd={(e) => handleTouchEnd(e, title)}
       >
@@ -111,7 +141,7 @@ const Films = ({ onBack }) => {
             ) : null}
           </View>
         )}
-      </View>
+      </Animated.View>
     );
   };
 

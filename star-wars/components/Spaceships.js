@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Platform, Modal } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Platform, Modal, Animated } from 'react-native';
 
 const Spaceships = ({ onBack }) => {
   const [ships, setShips] = useState([]);
@@ -12,10 +12,34 @@ const Spaceships = ({ onBack }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTitle, setSelectedTitle] = useState('');
   const touchStartX = useRef(0);
+  const animatedValues = useRef({});
+
+  const initializeAnimatedValues = (items) => {
+    items.forEach((item) => {
+      if (!animatedValues.current[item.uid]) {
+        animatedValues.current[item.uid] = new Animated.Value(0);
+      }
+    });
+  };
 
   useEffect(() => {
     fetchShips();
   }, []);
+
+  useEffect(() => {
+    if (ships.length > 0) {
+      initializeAnimatedValues(ships);
+      const animations = ships.map((ship) =>
+        Animated.timing(animatedValues.current[ship.uid], {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        })
+      );
+
+      Animated.stagger(100, animations).start();
+    }
+  }, [ships]);
 
   const handleSwipe = (title) => {
     setSelectedTitle(title);
@@ -26,7 +50,9 @@ const Spaceships = ({ onBack }) => {
     try {
       const response = await fetch('https://www.swapi.tech/api/starships');
       const data = await response.json();
-      setShips(data.results || []);
+      const items = data.results || [];
+      initializeAnimatedValues(items);
+      setShips(items);
     } catch (err) {
       setError('Failed to load spaceships');
     } finally {
@@ -82,9 +108,13 @@ const Spaceships = ({ onBack }) => {
     const loadingDetailsForShip = detailsLoading[item.uid];
     const errorDetails = detailsError[item.uid];
 
+    const animatedStyle = {
+      opacity: animatedValues.current[item.uid] || new Animated.Value(0),
+    };
+
     return (
-      <View
-        style={styles.item}
+      <Animated.View
+        style={[styles.item, animatedStyle]}
         onTouchStart={handleTouchStart}
         onTouchEnd={(e) => handleTouchEnd(e, item.name)}
       >
@@ -109,7 +139,7 @@ const Spaceships = ({ onBack }) => {
             ) : null}
           </View>
         )}
-      </View>
+      </Animated.View>
     );
   };
 

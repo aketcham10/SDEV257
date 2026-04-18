@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Platform, Modal } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Platform, Modal, Animated } from 'react-native';
 const Planets = ({ onBack }) => {
   const [planets, setPlanets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -11,10 +11,34 @@ const Planets = ({ onBack }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTitle, setSelectedTitle] = useState('');
   const touchStartX = useRef(0);
+  const animatedValues = useRef({});
+
+  const initializeAnimatedValues = (items) => {
+    items.forEach((item) => {
+      if (!animatedValues.current[item.uid]) {
+        animatedValues.current[item.uid] = new Animated.Value(0);
+      }
+    });
+  };
 
   useEffect(() => {
     fetchPlanets();
   }, []);
+
+  useEffect(() => {
+    if (planets.length > 0) {
+      initializeAnimatedValues(planets);
+      const animations = planets.map((planet) =>
+        Animated.timing(animatedValues.current[planet.uid], {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        })
+      );
+
+      Animated.stagger(100, animations).start();
+    }
+  }, [planets]);
 
   const handleSwipe = (title) => {
     setSelectedTitle(title);
@@ -25,7 +49,9 @@ const Planets = ({ onBack }) => {
     try {
       const response = await fetch('https://www.swapi.tech/api/planets');
       const data = await response.json();
-      setPlanets(data.results || []);
+      const items = data.results || [];
+      initializeAnimatedValues(items);
+      setPlanets(items);
     } catch (err) {
       setError('Failed to load planets');
     } finally {
@@ -81,9 +107,13 @@ const Planets = ({ onBack }) => {
     const loadingDetailsForPlanet = detailsLoading[item.uid];
     const errorDetails = detailsError[item.uid];
 
+    const animatedStyle = {
+      opacity: animatedValues.current[item.uid] || new Animated.Value(0),
+    };
+
     return (
-      <View
-        style={styles.planetItem}
+      <Animated.View
+        style={[styles.planetItem, animatedStyle]}
         onTouchStart={handleTouchStart}
         onTouchEnd={(e) => handleTouchEnd(e, item.name)}
       >
@@ -108,7 +138,7 @@ const Planets = ({ onBack }) => {
             ) : null}
           </View>
         )}
-      </View>
+      </Animated.View>
     );
   };
 
