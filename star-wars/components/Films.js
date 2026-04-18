@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Platform, Modal, PanResponder } from 'react-native';
 
 const Films = ({ onBack }) => {
   const [films, setFilms] = useState([]);
@@ -9,10 +9,18 @@ const Films = ({ onBack }) => {
   const [expandedFilms, setExpandedFilms] = useState({});
   const [detailsLoading, setDetailsLoading] = useState({});
   const [detailsError, setDetailsError] = useState({});
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedTitle, setSelectedTitle] = useState('');
+  const touchStartX = useRef(0);
 
   useEffect(() => {
     fetchFilms();
   }, []);
+
+  const handleSwipe = (title) => {
+    setSelectedTitle(title);
+    setModalVisible(true);
+  };
 
   const fetchFilms = async () => {
     try {
@@ -57,6 +65,18 @@ const Films = ({ onBack }) => {
     fetchFilmDetails(item);
   };
 
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.nativeEvent.pageX;
+  };
+
+  const handleTouchEnd = (e, title) => {
+    const touchEndX = e.nativeEvent.pageX;
+    const distance = Math.abs(touchEndX - touchStartX.current);
+    if (distance > 50) {
+      handleSwipe(title);
+    }
+  };
+
   const renderFilm = ({ item }) => {
     const isExpanded = expandedFilms[item.uid];
     const details = filmDetails[item.uid];
@@ -65,7 +85,11 @@ const Films = ({ onBack }) => {
     const title = item.properties?.title || item.name || 'Unknown film';
 
     return (
-      <View style={styles.item}>
+      <View
+        style={styles.item}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={(e) => handleTouchEnd(e, title)}
+      >
         <Text style={styles.itemTitle}>{title}</Text>
         <TouchableOpacity style={styles.showMoreButton} onPress={() => toggleFilmDetails(item)}>
           <Text style={styles.showMoreText}>{isExpanded ? 'Hide details' : 'Show more'}</Text>
@@ -111,6 +135,25 @@ const Films = ({ onBack }) => {
           />
         )}
       </View>
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.centeredView}>
+          <View style={styles.modalView}>
+            <Text style={styles.modalTitle}>{selectedTitle}</Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.closeButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -177,6 +220,44 @@ const styles = StyleSheet.create({
   error: {
     fontSize: 16,
     color: 'red',
+    textAlign: 'center',
+  },
+  centeredView: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalView: {
+    margin: 20,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 35,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  closeButton: {
+    backgroundColor: '#0a7ea4',
+    borderRadius: 8,
+    padding: 10,
+    paddingHorizontal: 20,
+  },
+  closeButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
     textAlign: 'center',
   },
 });
