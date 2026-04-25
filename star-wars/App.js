@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Platform, TextInput, Modal } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import NetInfo from '@react-native-community/netinfo';
 import Box from './components/Box';
 import Planets from './components/Planets';
 import Films from './components/Films';
@@ -11,6 +12,15 @@ export default function App() {
   const [inputText, setInputText] = useState('');
   const [submittedText, setSubmittedText] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
+  const [isConnected, setIsConnected] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      setIsConnected(state.isConnected);
+    });
+
+    return unsubscribe;
+  }, []);
 
   const renderScreen = () => {
     switch (currentScreen) {
@@ -44,6 +54,11 @@ export default function App() {
                 <Text style={styles.submitButtonText}>Submit</Text>
               </TouchableOpacity>
             </View>
+            {!isConnected && (
+              <View style={styles.offlineContainer}>
+                <Text style={styles.offlineText}>You are currently offline. Some features may not be available.</Text>
+              </View>
+            )}
             <ScrollView style={styles.container}>
               <View style={styles.header}>
                 <Text style={styles.title}>Star Wars</Text>
@@ -198,5 +213,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  offlineContainer: {
+    backgroundColor: '#ffcc00',
+    padding: 10,
+    alignItems: 'center',
+  },
+  offlineText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
