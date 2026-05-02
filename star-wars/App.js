@@ -84,7 +84,7 @@ export default function App() {
     }
 
     const lowerQuery = query.toLowerCase();
-    const results = [
+    const scoredResults = [
       ...planetsData.map((item) => ({
         id: `planet-${item.uid}`,
         type: 'Planet',
@@ -104,13 +104,27 @@ export default function App() {
         title: item.name,
         subtitle: item.model ? `Model: ${item.model}` : 'Spaceship',
       })),
-    ].filter((item) =>
-      item.title.toLowerCase().includes(lowerQuery) ||
-      item.subtitle.toLowerCase().includes(lowerQuery) ||
-      (item.openingCrawl || '').toLowerCase().includes(lowerQuery)
-    );
+    ].map((item) => {
+      const title = item.title.toLowerCase();
+      const subtitle = (item.subtitle || '').toLowerCase();
+      const openingCrawl = (item.openingCrawl || '').toLowerCase();
+      let score = 0;
 
-    setSearchResults(results);
+      if (title === lowerQuery || subtitle === lowerQuery) {
+        score = 4;
+      } else if (title.startsWith(lowerQuery) || subtitle.startsWith(lowerQuery)) {
+        score = 3;
+      } else if (title.includes(lowerQuery) || subtitle.includes(lowerQuery)) {
+        score = 2;
+      } else if (openingCrawl.includes(lowerQuery)) {
+        score = 1;
+      }
+
+      return { ...item, score };
+    }).filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+
+    setSearchResults(scoredResults);
     setSearchQuery(query);
     setCurrentScreen('search');
     setInputText('');
