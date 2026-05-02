@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Platform, Modal, Animated } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Platform, Animated, ScrollView } from 'react-native';
 import Banner from './Banner';
 const Planets = ({ onBack }) => {
   const [planets, setPlanets] = useState([]);
@@ -9,8 +9,7 @@ const Planets = ({ onBack }) => {
   const [expandedPlanets, setExpandedPlanets] = useState({});
   const [detailsLoading, setDetailsLoading] = useState({});
   const [detailsError, setDetailsError] = useState({});
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedTitle, setSelectedTitle] = useState('');
+  const [detailPlanet, setDetailPlanet] = useState(null);
   const touchStartX = useRef(0);
   const animatedValues = useRef({});
 
@@ -41,9 +40,9 @@ const Planets = ({ onBack }) => {
     }
   }, [planets]);
 
-  const handleSwipe = (title) => {
-    setSelectedTitle(title);
-    setModalVisible(true);
+  const handleSwipe = (item) => {
+    setDetailPlanet(item);
+    fetchPlanetDetails(item);
   };
 
   const fetchPlanets = async () => {
@@ -94,12 +93,39 @@ const Planets = ({ onBack }) => {
     touchStartX.current = e.nativeEvent.pageX;
   };
 
-  const handleTouchEnd = (e, title) => {
+  const handleTouchEnd = (e, item) => {
     const touchEndX = e.nativeEvent.pageX;
-    const distance = Math.abs(touchEndX - touchStartX.current);
-    if (distance > 50) {
-      handleSwipe(title);
+    const distance = touchEndX - touchStartX.current;
+    if (distance < -50) {
+      handleSwipe(item);
     }
+  };
+
+  const formatDetailValue = (key, value) => {
+    if (value == null || value === '') {
+      return 'Unknown';
+    }
+
+    if (key === 'created' || key === 'edited') {
+      const date = new Date(value);
+      if (!isNaN(date)) {
+        return date.toLocaleString();
+      }
+    }
+
+    if (key === 'diameter') {
+      return `${value} km`;
+    }
+
+    if (key === 'rotation_period') {
+      return `${value} hours`;
+    }
+
+    if (Array.isArray(value)) {
+      return value.join(', ');
+    }
+
+    return String(value);
   };
 
   const renderPlanet = ({ item }) => {
@@ -116,9 +142,10 @@ const Planets = ({ onBack }) => {
       <Animated.View
         style={[styles.planetItem, animatedStyle]}
         onTouchStart={handleTouchStart}
-        onTouchEnd={(e) => handleTouchEnd(e, item.name)}
+        onTouchEnd={(e) => handleTouchEnd(e, item)}
       >
         <Text style={styles.planetName}>{item.name}</Text>
+        <Text style={styles.swipeHint}>Swipe left for details</Text>
         <TouchableOpacity style={styles.showMoreButton} onPress={() => togglePlanetDetails(item)}>
           <Text style={styles.showMoreText}>{isExpanded ? 'Hide details' : 'Show more'}</Text>
         </TouchableOpacity>
@@ -144,6 +171,41 @@ const Planets = ({ onBack }) => {
   };
 
 
+  if (detailPlanet) {
+    const uid = detailPlanet.uid;
+    const details = planetDetails[uid];
+    const loadingDetailsForPlanet = detailsLoading[uid];
+    const errorDetails = detailsError[uid];
+
+    return (
+      <View style={styles.container}>
+        <TouchableOpacity onPress={() => setDetailPlanet(null)} style={styles.backButton}>
+          <Text style={styles.backText}>← Back to planets</Text>
+        </TouchableOpacity>
+        <Banner />
+        <ScrollView style={styles.content} contentContainerStyle={styles.detailContent}>
+          <Text style={styles.title}>{detailPlanet.name}</Text>
+          {loadingDetailsForPlanet ? (
+            <ActivityIndicator size="large" color="#0a7ea4" />
+          ) : errorDetails ? (
+            <Text style={styles.error}>{errorDetails}</Text>
+          ) : details ? (
+            <View style={styles.detailList}>
+              {Object.entries(details).map(([key, value]) => (
+                <View key={key} style={styles.detailItem}>
+                      <Text style={styles.detailLabel}>{key.replace(/_/g, ' ').replace(/\b\w/g, (chr) => chr.toUpperCase())}</Text>
+                  <Text style={styles.detailValue}>{formatDetailValue(key, value)}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.error}>Planet details not available.</Text>
+          )}
+        </ScrollView>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -165,25 +227,6 @@ const Planets = ({ onBack }) => {
           />
         )}
       </View>
-
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.centeredView}>
-          <View style={styles.modalView}>
-            <Text style={styles.modalTitle}>{selectedTitle}</Text>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setModalVisible(false)}
-            >
-              <Text style={styles.closeButtonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
@@ -252,43 +295,34 @@ const styles = StyleSheet.create({
     color: 'red',
     textAlign: 'center',
   },
-  centeredView: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  detailContent: {
+    paddingBottom: 20,
   },
-  modalView: {
-    margin: 20,
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 35,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+  detailList: {
+    marginTop: 16,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    textAlign: 'center',
+  detailItem: {
+    padding: 16,
+    marginBottom: 12,
+    backgroundColor: '#f4f8fb',
+    borderRadius: 10,
   },
-  closeButton: {
-    backgroundColor: '#0a7ea4',
-    borderRadius: 8,
-    padding: 10,
-    paddingHorizontal: 20,
+  detailLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0a7ea4',
+    marginBottom: 6,
   },
-  closeButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    textAlign: 'center',
+  detailValue: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 22,
+  },
+  swipeHint: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    marginBottom: 10,
   },
 });
 
