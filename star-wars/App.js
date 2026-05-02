@@ -1,8 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Platform, TextInput, Modal } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Platform, TextInput, FlatList } from 'react-native';
 import { useState, useEffect } from 'react';
 import NetInfo from '@react-native-community/netinfo';
-import Box from './components/Box';
 import Planets from './components/Planets';
 import Films from './components/Films';
 import Spaceships from './components/Spaceships';
@@ -10,9 +9,112 @@ import Spaceships from './components/Spaceships';
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('home');
   const [inputText, setInputText] = useState('');
-  const [submittedText, setSubmittedText] = useState('');
-  const [modalVisible, setModalVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [planetsData, setPlanetsData] = useState([]);
+  const [filmsData, setFilmsData] = useState([]);
+  const [shipsData, setShipsData] = useState([]);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [dataError, setDataError] = useState(null);
   const [isConnected, setIsConnected] = useState(true);
+
+  const fetchAllPages = async (baseUrl) => {
+    let page = 1;
+    let allItems = [];
+    const seenIds = new Set();
+
+    while (true) {
+      const response = await fetch(`${baseUrl}?page=${page}`);
+      const data = await response.json();
+      const results = data.results || data.result || [];
+      if (!results.length) {
+        break;
+      }
+
+      const newItems = results.filter((item) => !seenIds.has(item.uid));
+      if (!newItems.length) {
+        break;
+      }
+
+      newItems.forEach((item) => seenIds.add(item.uid));
+      allItems = allItems.concat(newItems);
+
+      const total = data.total_records || allItems.length;
+      if (allItems.length >= total) {
+        break;
+      }
+
+      page += 1;
+      if (page > 20) {
+        break;
+      }
+    }
+
+    return allItems;
+  };
+
+  const fetchAllData = async () => {
+    try {
+      setDataError(null);
+      setDataLoading(true);
+
+      const [planets, filmsResponse, ships] = await Promise.all([
+        fetchAllPages('https://www.swapi.tech/api/planets'),
+        fetch('https://www.swapi.tech/api/films'),
+        fetchAllPages('https://www.swapi.tech/api/starships'),
+      ]);
+
+      const filmsJson = await filmsResponse.json();
+      const films = filmsJson.result || [];
+
+      setPlanetsData(planets);
+      setFilmsData(films);
+      setShipsData(ships);
+    } catch (err) {
+      setDataError('Unable to load Star Wars data.');
+    } finally {
+      setDataLoading(false);
+    }
+  };
+
+  const handleSearchSubmit = () => {
+    const query = inputText.trim();
+    if (!query || dataLoading) {
+      return;
+    }
+
+    const lowerQuery = query.toLowerCase();
+    const results = [
+      ...planetsData.map((item) => ({
+        id: `planet-${item.uid}`,
+        type: 'Planet',
+        title: item.name,
+        subtitle: 'Planet',
+      })),
+      ...filmsData.map((item) => ({
+        id: `film-${item.uid}`,
+        type: 'Film',
+        title: item.properties?.title || 'Untitled film',
+        subtitle: `Episode ${item.properties?.episode_id || 'Unknown'}`,
+        openingCrawl: item.properties?.opening_crawl,
+      })),
+      ...shipsData.map((item) => ({
+        id: `starship-${item.uid}`,
+        type: 'Spaceship',
+        title: item.name,
+        subtitle: item.model ? `Model: ${item.model}` : 'Spaceship',
+      })),
+    ].filter((item) =>
+      item.title.toLowerCase().includes(lowerQuery) ||
+      item.subtitle.toLowerCase().includes(lowerQuery) ||
+      (item.openingCrawl || '').toLowerCase().includes(lowerQuery)
+    );
+
+    setSearchResults(results);
+    setSearchQuery(query);
+    setCurrentScreen('search');
+    setInputText('');
+  };
 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener(state => {
@@ -22,6 +124,18 @@ export default function App() {
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    fetchAllData();
+  }, []);
+
+  const renderSearchResult = ({ item }) => (
+    <View style={styles.resultCard}>
+      <Text style={styles.resultType}>{item.type}</Text>
+      <Text style={styles.resultTitle}>{item.title}</Text>
+      {item.subtitle ? <Text style={styles.resultSubtitle}>{item.subtitle}</Text> : null}
+    </View>
+  );
+
   const renderScreen = () => {
     switch (currentScreen) {
       case 'planets':
@@ -30,28 +144,76 @@ export default function App() {
         return <Films onBack={() => setCurrentScreen('home')} />;
       case 'spaceships':
         return <Spaceships onBack={() => setCurrentScreen('home')} />;
+      case 'search':
+        return (
+          <View style={styles.mainContainer}>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Search Star Wars..."
+                value={inputText}
+                onChangeText={setInputText}
+                onSubmitEditing={handleSearchSubmit}
+                returnKeyType="search"
+                placeholderTextColor="#999"
+                blurOnSubmit={false}
+              />
+              <TouchableOpacity
+                style={styles.submitButton}
+                onPress={handleSearchSubmit}
+              >
+                <Text style={styles.submitButtonText}>Search</Text>
+              </TouchableOpacity>
+            </View>
+            {!isConnected && (
+              <View style={styles.offlineContainer}>
+                <Text style={styles.offlineText}>You are currently offline. Some features may not be available.</Text>
+              </View>
+            )}
+            <View style={styles.searchHeader}>
+              <TouchableOpacity style={styles.backButtonSmall} onPress={() => setCurrentScreen('home')}>
+                <Text style={styles.backText}>← Home</Text>
+              </TouchableOpacity>
+              <Text style={styles.searchTitle}>Search results for "{searchQuery}"</Text>
+            </View>
+            <View style={styles.searchResultsContainer}>
+              {dataLoading ? (
+                <Text style={styles.loadingText}>Loading Star Wars data...</Text>
+              ) : dataError ? (
+                <Text style={styles.error}>{dataError}</Text>
+              ) : searchResults.length === 0 ? (
+                <Text style={styles.noResults}>No results found for "{searchQuery}".</Text>
+              ) : (
+                <FlatList
+                  data={searchResults}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderSearchResult}
+                  contentContainerStyle={styles.resultsList}
+                  showsVerticalScrollIndicator={false}
+                />
+              )}
+            </View>
+          </View>
+        );
       default:
         return (
           <View style={styles.mainContainer}>
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.textInput}
-                placeholder="Enter text..."
+                placeholder="Search Star Wars..."
                 value={inputText}
                 onChangeText={setInputText}
+                onSubmitEditing={handleSearchSubmit}
+                returnKeyType="search"
                 placeholderTextColor="#999"
+                blurOnSubmit={false}
               />
               <TouchableOpacity
                 style={styles.submitButton}
-                onPress={() => {
-                  if (inputText.trim()) {
-                    setSubmittedText(inputText);
-                    setModalVisible(true);
-                    setInputText('');
-                  }
-                }}
+                onPress={handleSearchSubmit}
               >
-                <Text style={styles.submitButtonText}>Submit</Text>
+                <Text style={styles.submitButtonText}>Search</Text>
               </TouchableOpacity>
             </View>
             {!isConnected && (
@@ -81,26 +243,6 @@ export default function App() {
               
               <StatusBar style="auto" />
             </ScrollView>
-            
-            <Modal
-              animationType="fade"
-              transparent={true}
-              visible={modalVisible}
-              onRequestClose={() => setModalVisible(false)}
-            >
-              <View style={styles.modalContainer}>
-                <View style={styles.modalContent}>
-                  <Text style={styles.modalTitle}>Submitted Text</Text>
-                  <Text style={styles.modalText}>{submittedText}</Text>
-                  <TouchableOpacity
-                    style={styles.closeButton}
-                    onPress={() => setModalVisible(false)}
-                  >
-                    <Text style={styles.closeButtonText}>Close</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </Modal>
           </View>
         );
     }
@@ -173,46 +315,62 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  searchHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 10,
+    backgroundColor: '#eef6fb',
   },
-  modalContent: {
-    width: '80%',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+  backButtonSmall: {
+    marginBottom: 10,
   },
-  modalTitle: {
+  searchTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 12,
     color: '#0a7ea4',
   },
-  modalText: {
+  searchResultsContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+  },
+  resultsList: {
+    paddingBottom: 20,
+  },
+  resultCard: {
+    backgroundColor: '#f4f8fb',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  resultType: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0a7ea4',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  resultTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0a7ea4',
+  },
+  resultSubtitle: {
+    fontSize: 14,
+    color: '#555',
+    marginTop: 6,
+  },
+  loadingText: {
     fontSize: 16,
     color: '#333',
-    marginBottom: 20,
     textAlign: 'center',
+    marginTop: 20,
   },
-  closeButton: {
-    backgroundColor: '#0a7ea4',
-    paddingVertical: 10,
-    paddingHorizontal: 30,
-    borderRadius: 8,
-  },
-  closeButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
+  noResults: {
     fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+    marginTop: 20,
   },
   offlineContainer: {
     backgroundColor: '#ffcc00',
